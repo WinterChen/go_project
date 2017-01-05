@@ -1,0 +1,24 @@
+<!--
+Created Time:    2016-08-11 02:15:05 by winter
+Modified Time:   2016-08-11 02:23:02 by winter
+-->
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+
+<seelog>
+    <outputs formatid="main">
+        <filter levels="critical">
+            <file path="./log/stat.log"/>
+        </filter>
+        <filter levels="trace,debug,info">
+            <file path="./log/common.log"/>
+            <rollingfile type="size" filename="./log/common.log" maxsize="12" maxrolls="5" />
+        </filter>
+        <filter levels="warn,error">
+            <file path="./log/error.log"/>
+            <rollingfile type="size" filename="./log/error.log" maxsize="12" maxrolls="5" />
+        </filter>
+    </outputs>
+    <formats>
+        <format id="main" format="%Date(2006-01-02 15:04:05.999999) [%File.%Line] %LEV %Msg%n"/>
+    </formats>
+</seelog>
