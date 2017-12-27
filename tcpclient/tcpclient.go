@@ -1,4 +1,4 @@
-package main
+package tcpclient
 
 import(
 	"log"
@@ -17,7 +17,7 @@ type TcpClient struct {
 	outMessageChan chan *Message
 	inMessageChan chan *Message
 	writeExit chan bool
-	readExit chan bool
+	//readExit chan bool
 }
 
 
@@ -29,7 +29,7 @@ func NewTcpClient(serverAddr string, readBufLen int) (*TcpClient){
 		outMessageChan : make(chan *Message, 1024),
 		inMessageChan : make(chan *Message, 1024),
 		writeExit : make(chan bool),
-		readExit : make(chan bool),
+		//readExit : make(chan bool),
 	}
 }
 
@@ -71,21 +71,21 @@ func (this *TcpClient)WaitingForRead(){
 				if needRead == 0 {
 					head = ParseHead(buf[startPos:])
 				}
-				needRead = int(head.bodyLen) - (endPos - startPos - this.headLen)
-				log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, head.bodyLen, head.magic, head.seq, needRead)
+				needRead = int(head.BodyLen) - (endPos - startPos - this.headLen)
+				log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, head.BodyLen, head.Magic, head.Seq, needRead)
 				if needRead > 0 {
 					//没有读够bodyLen个长度的数据，退出继续读
 					break
 				} else {
 					//这里多余一次make和copy的调用
-					bodyDate := make([]byte, head.bodyLen)
+					bodyDate := make([]byte, head.BodyLen)
 					copy(bodyDate, buf[startPos+this.headLen : ])
 					err = this.handleMsg(bodyDate, head)
 					if err != nil {
 						log.Printf("handle msg error, close the connection\n")
 						goto DISCONNECT
 					}
-					startPos += int(head.bodyLen) + this.headLen
+					startPos += int(head.BodyLen) + this.headLen
 					needRead = 0
 					if startPos == endPos {
 						startPos = 0
@@ -119,8 +119,8 @@ DISCONNECT:
 
 func (this *TcpClient) handleMsg(buf []byte, head *ProtoHead)(error){
 	msg := &Message{
-		head : head,
-		bodyBuf : buf,
+		Head : head,
+		BodyBuf : buf,
 	}
 	select {
 	case this.inMessageChan <- msg:
@@ -156,7 +156,7 @@ func (this *TcpClient) WaitingForWrite(){
 	}
 DISCONNECT:
 	this.Disconnect()
-	this.readExit <- true
+	//this.readExit <- true
 	log.Printf("WaitingForWrite exit \n")
 }
 

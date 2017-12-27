@@ -2,13 +2,14 @@ package main
 import (
 	"log"
 	"flag"	
+	"go_project/tcpclient"
 )
 
 
 func main(){
 	serverAddr := flag.String("server", "127.0.0.1:33333", "服务器的ip:port")
 	flag.Parse()
-	tcpClient := NewTcpClient(*serverAddr, 1024*1024)
+	tcpClient := tcpclient.NewTcpClient(*serverAddr, 1024*1024)
 	err := tcpClient.Start()
 	if err != nil {
 		log.Panicln("tcpClient start fail, err:", err.Error())
@@ -16,12 +17,12 @@ func main(){
 	}
 	//发送一个消息给server
 	bodyBuf := "hello world"
-	head := &ProtoHead{
+	head := &tcpclient.ProtoHead{
 		bodyLen : uint16(len(bodyBuf)),
 		magic : 1,
 		seq : 1,
 	}
-	msg := &Message{
+	msg := &tcpclient.Message{
 		head : head,
 		bodyBuf : []byte(bodyBuf),
 	}

@@ -1,4 +1,4 @@
-package main
+package tcpserver
 
 import (
 	"net"
@@ -74,7 +74,7 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 }
 
 
-//约定消息格式为
+//消息格式为
 /*
  	     8        16       24       32 
 |--------|--------|--------|--------|

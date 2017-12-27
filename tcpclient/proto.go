@@ -1,4 +1,4 @@
-package main
+package tcpclient
 
 import (
 	"encoding/binary"
@@ -7,14 +7,14 @@ import (
 
 const HEADLEN int = 8
 type ProtoHead struct {
-	bodyLen uint16
-	magic uint16
-	seq uint32
+	BodyLen uint16
+	Magic uint16
+	Seq uint32
 } 
 
 type Message struct {
-	head *ProtoHead
-	bodyBuf []byte
+	Head *ProtoHead
+	BodyBuf []byte
 }
 
 
@@ -23,21 +23,21 @@ func ParseHead(buf []byte)(*ProtoHead){
 	magic := binary.BigEndian.Uint16(buf[2 : 4])
 	seq := binary.BigEndian.Uint32(buf[4 : 8])
 	return &ProtoHead{
-		bodyLen : bodyLen,
-		magic : magic,
-		seq : seq,
+		BodyLen : bodyLen,
+		Magic : magic,
+		Seq : seq,
 	}
 }
 func (this *ProtoHead)Reset(){
-	this.bodyLen = 0
-	this.magic = 0
-	this.seq = 0
+	this.BodyLen = 0
+	this.Magic = 0
+	this.Seq = 0
 }
 
 func (this *Message) Encoding()([]byte){
 	msgBuf := new(bytes.Buffer)
-	binary.Write(msgBuf, binary.BigEndian, this.head)
-	msgBuf.Write(this.bodyBuf)
+	binary.Write(msgBuf, binary.BigEndian, this.Head)
+	msgBuf.Write(this.BodyBuf)
 	return msgBuf.Bytes()
 	
 }
