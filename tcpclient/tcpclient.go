@@ -52,7 +52,7 @@ func (this *TcpClient)WaitingForRead(){
 	log.Printf("remote: %s\n", connFrom)
 	var buf []byte = make([]byte, this.readBufLen)
 
-	var needRead int = this.readBufLen
+	var needRead int = 0
 	var head *ProtoHead
 	var endPos int = 0
 	var startPos int = 0

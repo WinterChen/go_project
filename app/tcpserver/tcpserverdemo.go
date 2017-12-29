@@ -10,7 +10,7 @@ import (
 func main(){
 	serverAddr := flag.String("addr", "127.0.0.1:33333", "tcp listen addr")
 	flag.Parse()
-	tcpServer := NewTcpServer(*serverAddr)
+	tcpServer := tcpserver.NewTcpServer(*serverAddr)
 	tcpServer.Start()
-	<- tcpServer.exitCmd
+	<- tcpServer.ExitCmd
 }

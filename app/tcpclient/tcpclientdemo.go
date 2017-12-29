@@ -12,19 +12,19 @@ func main(){
 	tcpClient := tcpclient.NewTcpClient(*serverAddr, 1024*1024)
 	err := tcpClient.Start()
 	if err != nil {
-		log.Panicln("tcpClient start fail, err:", err.Error())
+		log.Println("tcpClient start fail, err:", err.Error())
 		return
 	}
 	//发送一个消息给server
 	bodyBuf := "hello world"
 	head := &tcpclient.ProtoHead{
-		bodyLen : uint16(len(bodyBuf)),
-		magic : 1,
-		seq : 1,
+		BodyLen : uint16(len(bodyBuf)),
+		Magic : 1,
+		Seq : 1,
 	}
 	msg := &tcpclient.Message{
-		head : head,
-		bodyBuf : []byte(bodyBuf),
+		Head : head,
+		BodyBuf : []byte(bodyBuf),
 	}
 	err = tcpClient.Write(msg)
 	if err != nil {
@@ -38,7 +38,7 @@ func main(){
 		log.Println("get message err")
 		return
 	}
-	log.Printf("head:magic[%d],seq[%d], body:%s\n", msg.head.magic, msg.head.seq, string(msg.bodyBuf))
+	log.Printf("head:magic[%d],seq[%d], body:%s\n", msg.Head.Magic, msg.Head.Seq, string(msg.BodyBuf))
 
 
 }

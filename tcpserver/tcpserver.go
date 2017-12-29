@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 type TcpServer struct {
-	exitCmd chan bool
+	ExitCmd chan bool
 	tcpAddr string
 	clientMap map[uint64] *MessageHandler//[ip+port]->MessageHandler
 }
@@ -16,7 +16,7 @@ type TcpServer struct {
 type MessageHandler struct {
 	
 	conn net.Conn 
-	exitCmd chan bool
+	ExitCmd chan bool
 	writeChan chan []byte
 }
 
@@ -27,7 +27,7 @@ const (
 
 func NewTcpServer(tcpAddr string) (*TcpServer){
 	return &TcpServer{
-		exitCmd : make(chan bool),
+		ExitCmd : make(chan bool),
 		tcpAddr : tcpAddr,
 		clientMap : make(map[uint64] *MessageHandler),
 	}
@@ -41,7 +41,7 @@ func (this *TcpServer)Start(){
 
 func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 	defer func(){
-		this.exitCmd <- true
+		this.ExitCmd <- true
 	}()
 	serverAddr, err := net.ResolveTCPAddr("tcp", hostAndPort)
 	if err != nil {
@@ -62,10 +62,7 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 			listener.Close()
 			return err
 		}
-		handler := &MessageHandler{
-			conn:             conn,
-			exitCmd:                make(chan bool, 1),
-		}
+		handler := NewMessageHandler(conn)
 		//this.clientList = append(this.clientMap, handler)
 
 		go handler.WaitingForRead()
@@ -73,7 +70,13 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 	}
 }
 
-
+func NewMessageHandler(conn net.Conn) *MessageHandler{
+	return &MessageHandler{
+		conn : conn,
+		ExitCmd : make(chan bool),
+		writeChan : make(chan []byte, 1024*1024),
+	}
+}
 //消息格式为
 /*
  	     8        16       24       32 
@@ -118,7 +121,7 @@ func (this *MessageHandler)WaitingForRead(){
 				if needRead > 0 {
 					break
 				} else {
-					res := this.handleMsg(bodyLen, ibuf[startPos:], magic, seq)
+					res := this.handleMsg(8, bodyLen, ibuf[startPos:], magic, seq)
 					if res == -1 {
 						log.Printf("handle msg error, close the connection\n")
 						goto DISCONNECT
@@ -149,16 +152,18 @@ func (this *MessageHandler)WaitingForRead(){
 	}
 DISCONNECT:
 	this.conn.Close()
-	this.exitCmd <- true
+	this.ExitCmd <- true
 	log.Printf("Closed connection \n")
 
 }
 
-func (this *MessageHandler) handleMsg(len uint16, buf []byte, magic uint16, seq uint32) int {
+func (this *MessageHandler) handleMsg(headLen uint16, bodyLen uint16, buf []byte, magic uint16, seq uint32) int {
 	//1 MSG_ECHO
 	switch magic  {
 	case MSG_ECHO:
-		this.writeChan <- buf[:len]
+		rspBuf := make([]byte, headLen+bodyLen)
+		copy(rspBuf, buf[:headLen+bodyLen])
+		this.writeChan <- rspBuf
 	}
 	return 0
 }
@@ -175,7 +180,7 @@ func (this *MessageHandler) WaitingForWrite() {
 				//write error, donot do something. or close the socket ?
 				log.Printf("write error: %s", err.Error())
 			}
-		case <-this.exitCmd:
+		case <-this.ExitCmd:
 			log.Printf("recv exit cmd\n")
 			goto EXITHANDLER
 		}
