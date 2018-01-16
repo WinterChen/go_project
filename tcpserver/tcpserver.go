@@ -85,8 +85,8 @@ func NewMessageHandler(conn net.Conn) *MessageHandler{
 |--------|--------|--------|--------|
 |                seq                |   
 |--------|--------|--------|--------|
-
-
+|                 body              |
+|                                   |
 
 */
 func (this *MessageHandler)WaitingForRead(){
