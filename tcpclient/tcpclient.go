@@ -7,6 +7,7 @@ import(
 	"bytes"
 	"syscall"
 	"errors"
+	"sync"
 )
 
 type TcpClient struct {
@@ -17,7 +18,8 @@ type TcpClient struct {
 	outMessageChan chan *Message
 	inMessageChan chan *Message
 	writeExit chan bool
-	//readExit chan bool
+	status int //0:disconnected, 1:connecting 
+	statusLock *sync.Mutex
 }
 
 
@@ -29,6 +31,8 @@ func NewTcpClient(serverAddr string, readBufLen int) (*TcpClient){
 		outMessageChan : make(chan *Message, 1024),
 		inMessageChan : make(chan *Message, 1024),
 		writeExit : make(chan bool),
+		status : 0,
+		statusLock : new(sync.Mutex),
 		//readExit : make(chan bool),
 	}
 }
@@ -42,6 +46,7 @@ func (this *TcpClient)Start() error{
 	}
 	log.Println("connect to server succ...")
 	this.conn = conn
+	this.status = 1
 	go this.WaitingForWrite()
 	go this.WaitingForRead()
 	return nil
@@ -104,7 +109,7 @@ func (this *TcpClient)WaitingForRead(){
 			log.Printf("read need try again\n")
 			continue
 		default:
-			log.Printf("read error %s\n", err.Error())
+			log.Printf("read error: %s\n", err.Error())
 			goto DISCONNECT
 		}
 
@@ -132,13 +137,16 @@ func (this *TcpClient) handleMsg(buf []byte, head *ProtoHead)(error){
 	return nil
 }
 
-
+//退出：
+//（1）outMessageChan被关闭，被动，直接退出
+//（2）socket write 错误，主动，需关闭socket等资源
+//（3）writeExit收到退出消息，被动，直接退出
 func (this *TcpClient) WaitingForWrite(){
 	for {
 		select {
 		case msg, ok := <- this.outMessageChan:
 			if !ok {
-				log.Printf("message chan maybe closed by others")
+				log.Printf("out message chan maybe closed by others")
 				return
 			}
 			_, err := this.conn.Write(msg.Encoding())
@@ -162,9 +170,15 @@ DISCONNECT:
 
 
 func (this *TcpClient) Disconnect(){
+	this.statusLock.Lock()
+	defer this.statusLock.Unlock()
+	if this.status == 0 {
+		return
+	}
 	this.conn.Close()
 	close(this.inMessageChan)
 	close(this.outMessageChan)
+	this.status = 0
 
 }
 
