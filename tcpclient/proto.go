@@ -23,7 +23,7 @@ func ParseHead(buf []byte)(*ProtoHead){
 	bodyLen := binary.BigEndian.Uint16(buf[:2])
 	magic := binary.BigEndian.Uint16(buf[2 : 4])
 	seq := binary.BigEndian.Uint32(buf[4 : 8])
-	log.Printf("bodyLen:%d, magic:%d, seq:%d", bodyLen, magic, seq)
+	//log.Printf("bodyLen:%d, magic:%d, seq:%d", bodyLen, magic, seq)
 	return &ProtoHead{
 		BodyLen : bodyLen,
 		Magic : magic,
