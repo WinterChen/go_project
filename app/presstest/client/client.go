@@ -23,7 +23,7 @@ func startAClient(serverAddr string, msgCnt int, reconnectCnt int, connectionId 
 		Head : head,
 		BodyBuf : []byte(bodyBuf),
 	}
-	log.Panicf("client:%d starting...\n", connectionId)
+	log.Printf("client:%d starting...\n", connectionId)
 	for i := 0; i < reconnectCnt; i++ {
 		cli := tcpclient.NewTcpClient(serverAddr, 1024)
 		err := cli.Start()
