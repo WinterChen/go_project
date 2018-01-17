@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"runtime/pprof"
+	//"runtime/pprof"
 )
 
 
@@ -25,7 +25,7 @@ func main(){
         //阻塞程序运行，直到收到终止的信号
         sig := <-killSignalChan
 		log.Printf("recv signal: %v\n", sig)
-		pprof.WriteHeapProfile(f)
+		//pprof.WriteHeapProfile(f)
 		f.Close()
 		os.Exit(0)
         
