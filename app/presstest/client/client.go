@@ -12,7 +12,7 @@ var exitChan chan bool
 //msgCnt:每次连接上server后，发送消息个数。发送完后关闭连接。
 //reconnectCnt:关闭连接后重新连接次数。
 //connectionId:连接的ID
-func startAClient(serverAddr string, msgCnt int, reconnectCnt int, connectionId uint32){
+func startAClient(serverAddr string, reconnectCnt int, msgCnt int, connectionId uint32){
 	bodyBuf := "hello world"
 	head := &tcpclient.ProtoHead{
 		BodyLen : uint16(len(bodyBuf)),
@@ -31,6 +31,7 @@ func startAClient(serverAddr string, msgCnt int, reconnectCnt int, connectionId 
 			log.Println("tcpClient start fail, err:", err.Error())
 			return
 		} 
+		start := time.Now()
 		for j := 0; j < msgCnt; j++{
 			//发送一个消息给server
 			err = cli.Write(msg)
@@ -47,7 +48,9 @@ func startAClient(serverAddr string, msgCnt int, reconnectCnt int, connectionId 
 			}
 			//log.Printf("head:magic[%d],seq[%d], body:%s\n", msg.Head.Magic, msg.Head.Seq, string(msg.BodyBuf))
 		}
-		log.Printf("id:%d, 第 %d 次连接每次发送了%d个消息\n", connectionId, i, msgCnt)
+		end := time.Now()
+		timeUse := end.Sub(start).Nanoseconds()
+		log.Printf("id:%d, 第 %d 次连接每次发送了%d个消息,耗时：%d/%d\n", connectionId, i, msgCnt, timeUse, (timeUse)/int64(msgCnt))
 		
 		cli.Disconnect()//关闭连接
 	}
