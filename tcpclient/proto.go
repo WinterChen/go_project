@@ -1,7 +1,7 @@
 package tcpclient
 
 import (
-	"log"
+	//"log"
 	"encoding/binary"
 	"bytes"
 )
