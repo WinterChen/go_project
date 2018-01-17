@@ -63,7 +63,7 @@ func (this *TcpClient)WaitingForRead(){
 	var startPos int = 0
 	for {
 		length, err := this.conn.Read(buf[endPos:])
-		log.Printf("read data: %d\n", length)
+		//log.Printf("read data: %d\n", length)
 		switch err {
 		case nil:
 			endPos += length
@@ -77,7 +77,7 @@ func (this *TcpClient)WaitingForRead(){
 					head = ParseHead(buf[startPos:])
 				}
 				needRead = int(head.BodyLen) - (endPos - startPos - this.headLen)
-				log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, head.BodyLen, head.Magic, head.Seq, needRead)
+				//log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, head.BodyLen, head.Magic, head.Seq, needRead)
 				if needRead > 0 {
 					//没有读够bodyLen个长度的数据，退出继续读
 					break
@@ -151,7 +151,7 @@ func (this *TcpClient) WaitingForWrite(){
 			}
 			_, err := this.conn.Write(msg.Encoding())
 			if err == nil {
-				log.Printf("write to %s\n", this.conn.RemoteAddr().String())
+				//log.Printf("write to %s\n", this.conn.RemoteAddr().String())
 			} else {
 				//write错误，关闭socket，并通知read goroutine退出
 				log.Printf("write error: %s\n", err.Error())

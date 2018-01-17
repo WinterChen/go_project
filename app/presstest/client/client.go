@@ -23,6 +23,7 @@ func startAClient(serverAddr string, msgCnt int, reconnectCnt int, connectionId 
 		Head : head,
 		BodyBuf : []byte(bodyBuf),
 	}
+	log.Panicf("client:%d starting...\n", connectionId)
 	for i := 0; i < reconnectCnt; i++ {
 		cli := tcpclient.NewTcpClient(serverAddr, 1024)
 		err := cli.Start()
@@ -38,19 +39,19 @@ func startAClient(serverAddr string, msgCnt int, reconnectCnt int, connectionId 
 				return
 			}
 			//等待server响应
-			log.Println("waiting for response...")
+			//log.Println("waiting for response...")
 			msg = cli.GetMessage()
 			if msg == nil {
 				log.Println("get message err")
 				return
 			}
-			log.Printf("head:magic[%d],seq[%d], body:%s\n", msg.Head.Magic, msg.Head.Seq, string(msg.BodyBuf))
+			//log.Printf("head:magic[%d],seq[%d], body:%s\n", msg.Head.Magic, msg.Head.Seq, string(msg.BodyBuf))
 		}
 		log.Printf("id:%d, 第 %d 次连接每次发送了%d个消息\n", connectionId, i, msgCnt)
 		
 		cli.Disconnect()//关闭连接
 	}
-	log.Printf("本次连接了%d次\n", reconnectCnt)
+	log.Printf("[%d]本次连接了%d次\n", connectionId, reconnectCnt)
 	exitChan <- true
 	return 
 }

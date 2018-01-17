@@ -110,7 +110,7 @@ func (this *MessageHandler)WaitingForRead(){
 	var seq uint32 = 0
 	for {
 		length, err := this.conn.Read(ibuf[endPos:])
-		log.Printf("read data: %d\n", length)
+		//log.Printf("read data: %d\n", length)
 		switch err {
 		case nil:
 			endPos += length
@@ -124,7 +124,7 @@ func (this *MessageHandler)WaitingForRead(){
 					seq = binary.BigEndian.Uint32(ibuf[startPos+4 : startPos+8])
 				}
 				needRead = int(bodyLen) - (endPos - startPos - 8)
-				log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, bodyLen, magic, seq, needRead)
+				//log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, bodyLen, magic, seq, needRead)
 				if needRead > 0 {
 					break
 				} else {
@@ -182,7 +182,7 @@ func (this *MessageHandler) WaitingForWrite() {
 			
 			_, err := this.conn.Write(buf)
 			if err == nil {
-				log.Printf("write to %s\n", this.conn.RemoteAddr().String())
+				//log.Printf("write to %s\n", this.conn.RemoteAddr().String())
 			} else {
 				//write error, donot do something. or close the socket ?
 				log.Printf("write error: %s", err.Error())
