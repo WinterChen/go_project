@@ -20,9 +20,10 @@ func HTTPHandler(w http.ResponseWriter, r *http.Request) {
 
 func main(){
 	serverAddr := flag.String("addr", "127.0.0.1:33333", "tcp listen addr")
+	pprofAddr := flag.String("pprofAddr", "localhost:6060", "pprof http listen addr")
 	flag.Parse()
 	go func(){
-		log.Println(http.ListenAndServe("localhost:6060", nil)) 
+		log.Println(http.ListenAndServe(*pprofAddr, nil)) 
 	}()
 	//生成内存prof，方便定位内存泄漏问题
 	f, err := os.OpenFile("./mem.prof", os.O_RDWR|os.O_CREATE, 0644)
