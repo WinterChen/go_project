@@ -18,8 +18,9 @@ type TcpServer struct {
 type MessageHandler struct {
 	
 	conn net.Conn 
-	ExitCmd chan bool
+	//ExitCmd chan bool
 	writeChan chan []byte
+	id int
 }
 
 const (
@@ -56,6 +57,7 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 		return err
 	}
 	log.Printf("start tcp server %s\n", hostAndPort)
+	objId := 0
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -63,7 +65,8 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 			listener.Close()
 			return err
 		}
-		handler := NewMessageHandler(conn)
+		handler := NewMessageHandler(conn, objId)
+		objId++
 		//this.clientList = append(this.clientMap, handler)
 
 		go handler.WaitingForRead()
@@ -71,11 +74,12 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 	}
 }
 
-func NewMessageHandler(conn net.Conn) *MessageHandler{
+func NewMessageHandler(conn net.Conn, id int) *MessageHandler{
 	return &MessageHandler{
 		conn : conn,
-		ExitCmd : make(chan bool),
+		//ExitCmd : make(chan bool),
 		writeChan : make(chan []byte, 1024*1024),
+		id : id,
 	}
 }
 //消息格式为
@@ -152,9 +156,13 @@ func (this *MessageHandler)WaitingForRead(){
 
 	}
 DISCONNECT:
-	this.conn.Close()
-	this.ExitCmd <- true
-	log.Printf("Closed connection \n")
+	
+	//生产者关闭chan
+	//close(this.ExitCmd)
+	close(this.writeChan)
+	
+	//this.ExitCmd <- true
+	log.Printf("MessageHandler: %d Closed connection  \n", this.id)
 
 }
 
@@ -172,21 +180,22 @@ func (this *MessageHandler) handleMsg(headLen uint16, bodyLen uint16, buf []byte
 func (this *MessageHandler) WaitingForWrite() {
 	for {
 		select {
-		case buf := <-this.writeChan:
-			
+		case buf, ok := <-this.writeChan:
+			if !ok {
+				goto EXITHANDLER
+			}
 			_, err := this.conn.Write(buf)
 			if err == nil {
 				//log.Printf("write to %s\n", this.conn.RemoteAddr().String())
 			} else {
 				//write error, donot do something. or close the socket ?
-				log.Printf("write error: %s", err.Error())
+				log.Printf("MessageHandler: %d, write error: %s", this.id, err.Error())
+				goto EXITHANDLER
 			}
-		case <-this.ExitCmd:
-			log.Printf("recv exit cmd\n")
-			goto EXITHANDLER
 		}
 	}
 EXITHANDLER:
-log.Printf("MessageHandler:WaitingForWrite exit\n")
+	this.conn.Close()
+	log.Printf("MessageHandler: %d WaitingForWrite exit\n", this.id)
 }
 	//1 MSG_ECHO
