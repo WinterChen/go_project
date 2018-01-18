@@ -10,6 +10,9 @@ import (
 	"runtime/pprof"
 	_ "net/http/pprof"
 	"net/http"
+	"runtime"
+	"fmt"
+	"time"
 )
 
 func HTTPHandler(w http.ResponseWriter, r *http.Request) {
@@ -18,6 +21,26 @@ func HTTPHandler(w http.ResponseWriter, r *http.Request) {
 	p.WriteTo(w, 1)
 }
 
+func WaitingForSignal() os.Signal{
+	signalChan := make(chan os.Signal, 1)
+	defer close(signalChan)
+	signal.Notify(signalChan, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGSTOP)
+	s := <-signalChan
+	signal.Stop(signalChan)
+	saveHeapProfile()
+	return s
+}
+//生成内存prof，方便定位内存泄漏问题
+func saveHeapProfile() {
+		runtime.GC()//先GC
+		f, err := os.Create(fmt.Sprintf("./heap_%s.prof", time.Now().Format("2006_01_02_03_04_05")))
+		if err != nil {
+			return
+		}
+		pprof.Lookup("heap").WriteTo(f, 1)
+		f.Close()
+	} 
+
 func main(){
 	serverAddr := flag.String("addr", "127.0.0.1:33333", "tcp listen addr")
 	pprofAddr := flag.String("pprofAddr", "localhost:6060", "pprof http listen addr")
@@ -25,6 +48,7 @@ func main(){
 	go func(){
 		log.Println(http.ListenAndServe(*pprofAddr, nil)) 
 	}()
+	/*
 	//生成内存prof，方便定位内存泄漏问题
 	f, err := os.OpenFile("./mem.prof", os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
@@ -41,7 +65,7 @@ func main(){
 		os.Exit(0)
         
     }(f)
-    signal.Notify(killSignalChan, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGSTOP)
+    signal.Notify(killSignalChan, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGSTOP)*/
 	tcpServer := tcpserver.NewTcpServer(*serverAddr)
 	tcpServer.Start()
 	<- tcpServer.ExitCmd
