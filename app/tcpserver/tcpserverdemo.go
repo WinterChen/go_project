@@ -21,14 +21,14 @@ func HTTPHandler(w http.ResponseWriter, r *http.Request) {
 	p.WriteTo(w, 1)
 }
 
-func WaitingForSignal() os.Signal{
+func WaitingForSignal(){
 	signalChan := make(chan os.Signal, 1)
 	defer close(signalChan)
 	signal.Notify(signalChan, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGSTOP)
-	s := <-signalChan
+	<-signalChan
 	signal.Stop(signalChan)
 	saveHeapProfile()
-	return s
+	os.Exit(0)
 }
 //生成内存prof，方便定位内存泄漏问题
 func saveHeapProfile() {
