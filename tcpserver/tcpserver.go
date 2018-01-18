@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"bytes"
 	"syscall"
-	"net/http"
-	"runtime/pprof"
+	//"net/http"
+	//"runtime/pprof"
 )
 type TcpServer struct {
 	ExitCmd chan bool
