@@ -48,6 +48,7 @@ func main(){
 	go func(){
 		log.Println(http.ListenAndServe(*pprofAddr, nil)) 
 	}()
+	go WaitingForSignal()
 	/*
 	//生成内存prof，方便定位内存泄漏问题
 	f, err := os.OpenFile("./mem.prof", os.O_RDWR|os.O_CREATE, 0644)
