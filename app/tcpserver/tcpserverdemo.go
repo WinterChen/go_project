@@ -7,13 +7,23 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	//"runtime/pprof"
+	"runtime/pprof"
+	_ "net/http/pprof"
+	"net/http"
 )
 
+func HTTPHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	p := pprof.Lookup("goroutine")
+	p.WriteTo(w, 1)
+}
 
 func main(){
 	serverAddr := flag.String("addr", "127.0.0.1:33333", "tcp listen addr")
 	flag.Parse()
+	go func(){
+		log.Println(http.ListenAndServe("localhost:6060", nil)) 
+	}()
 	//生成内存prof，方便定位内存泄漏问题
 	f, err := os.OpenFile("./mem.prof", os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {

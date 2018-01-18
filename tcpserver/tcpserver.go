@@ -39,12 +39,6 @@ func (this *TcpServer)Start(){
 	this.StartTcpServer(this.tcpAddr)
 }
 
-func HTTPHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-
-	p := pprof.Lookup("goroutine")
-	p.WriteTo(w, 1)
-}
 
 func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 	defer func(){
