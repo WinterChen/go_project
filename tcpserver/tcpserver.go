@@ -8,19 +8,30 @@ import (
 	"syscall"
 	//"net/http"
 	//"runtime/pprof"
+	"container/list"
+	"go_project/proto"
+	"unsafe"
 )
+
+
 type TcpServer struct {
 	ExitCmd chan bool
 	tcpAddr string
-	clientMap map[uint64] *MessageHandler//[ip+port]->MessageHandler
+	handlers *list.List
+	handlerCnt int
+	reclaimer chan *MessageHandler
+	//clientMap map[uint64] *MessageHandler//[ip+port]->MessageHandler
 }
 
 type MessageHandler struct {
 	
 	conn net.Conn 
-	//ExitCmd chan bool
+	ExitCmd chan bool
 	writeChan chan []byte
 	id int
+	freeMessages chan *proto.Message
+	processingMessages chan *proto.Message
+	reclaimer chan *MessageHandler
 }
 
 const (
@@ -28,15 +39,27 @@ const (
 	OTHER = 2
 )
 
+
 func NewTcpServer(tcpAddr string) (*TcpServer){
 	return &TcpServer{
 		ExitCmd : make(chan bool),
 		tcpAddr : tcpAddr,
-		clientMap : make(map[uint64] *MessageHandler),
+		handlers : list.New(),
+		handlerCnt : 1000,
+		reclaimer : make(chan *MessageHandler),
+		//clientMap : make(map[uint64] *MessageHandler),
 	}
 }
 
 func (this *TcpServer)Start(){
+	//提前生成对象池
+	log.Printf("提前生成对象池, 个数:%d\n", this.handlerCnt)
+	for i:=0;i<this.handlerCnt;i++ {
+		h := NewMessageHandler(nil, i, this.reclaimer)
+		this.handlers.PushBack(h)
+		log.Printf("i:%d, 每个大小：%d\n", i, unsafe.Sizeof(h))
+	}
+	log.Println("MessageHandler cnt: ", this.handlerCnt)
 	this.StartTcpServer(this.tcpAddr)
 }
 
@@ -57,47 +80,65 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 		return err
 	}
 	log.Printf("start tcp server %s\n", hostAndPort)
-	objId := 0
+	
+	var handler *MessageHandler
+	var ok bool
 	for {
+		
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Printf("accept error: %s , close this socket and exit\n", err.Error())
 			listener.Close()
 			return err
 		}
-		handler := NewMessageHandler(conn, objId)
-		objId++
+			
+		if this.handlers.Len() >= 1{
+			e := this.handlers.Front()//从handler池中拿一个
+			handler, ok = this.handlers.Remove(e).(*MessageHandler)
+			if ok {
+				handler.conn = conn
+			} else {//类型断言失败？不可能吧
+				log.Println("the element in handlers list is not MessageHandler type ???")
+				handler = NewMessageHandler(conn, this.handlerCnt,this.reclaimer)
+				this.handlerCnt++ 
+			}
+		} else {//handler池已经没有对象
+			log.Println("there is not enought element in obj list!!!")
+			handler = NewMessageHandler(conn, this.handlerCnt,this.reclaimer)
+			this.handlerCnt++
+		}
+		//每次从回收池中获取一个对象，丢到列表中
+		select {
+		case h := <- this.reclaimer:
+			this.handlers.PushBack(h)
+		default:
+			
+		}
+		
 		//this.clientList = append(this.clientMap, handler)
 
 		go handler.WaitingForRead()
 		go handler.WaitingForWrite()
+	
 	}
 }
 
-func NewMessageHandler(conn net.Conn, id int) *MessageHandler{
+func NewMessageHandler(conn net.Conn, id int, reclaimer chan *MessageHandler) *MessageHandler{
 	return &MessageHandler{
 		conn : conn,
-		//ExitCmd : make(chan bool),
+		ExitCmd : make(chan bool),
 		writeChan : make(chan []byte, 1024*1024),
 		id : id,
+		freeMessages : make(chan *proto.Message, 100*2),//容量是processingMessages两倍，可以根据实际调整
+		processingMessages : make(chan *proto.Message, 100),
+		reclaimer : reclaimer,
 	}
 }
-//消息格式为
-/*
- 	     8        16       24       32 
-|--------|--------|--------|--------|
-|      bodyLen    |        magic    |
-|--------|--------|--------|--------|
-|                seq                |   
-|--------|--------|--------|--------|
-|                 body              |
-|                                   |
 
-*/
 func (this *MessageHandler)WaitingForRead(){
 	connFrom := this.conn.RemoteAddr().String()
 	log.Printf("Connection from: %s\n", connFrom)
-	var ibuf []byte = make([]byte, 1024)
+	var ibuf []byte = make([]byte, 10240)
 
 	var needRead int = 1024
 
@@ -108,7 +149,7 @@ func (this *MessageHandler)WaitingForRead(){
 	var seq uint32 = 0
 	for {
 		length, err := this.conn.Read(ibuf[endPos:])
-		//log.Printf("read data: %d\n", length)
+		log.Printf("read data: %d\n", length)
 		switch err {
 		case nil:
 			endPos += length
@@ -122,7 +163,7 @@ func (this *MessageHandler)WaitingForRead(){
 					seq = binary.BigEndian.Uint32(ibuf[startPos+4 : startPos+8])
 				}
 				needRead = int(bodyLen) - (endPos - startPos - 8)
-				//log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, bodyLen, magic, seq, needRead)
+				log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, bodyLen, magic, seq, needRead)
 				if needRead > 0 {
 					break
 				} else {
@@ -157,45 +198,86 @@ func (this *MessageHandler)WaitingForRead(){
 	}
 DISCONNECT:
 	
-	//生产者关闭chan
-	//close(this.ExitCmd)
-	close(this.writeChan)
-	
-	//this.ExitCmd <- true
-	log.Printf("MessageHandler: %d Closed connection  \n", this.id)
+	this.ExitCmd <-true
+	log.Printf("MessageHandler: %d WaitingForRead exit  \n", this.id)
 
 }
 
 func (this *MessageHandler) handleMsg(headLen uint16, bodyLen uint16, buf []byte, magic uint16, seq uint32) int {
 	//1 MSG_ECHO
 	switch magic  {
-	case MSG_ECHO:
+		
+	case MSG_ECHO://echo
+		
+		this.ProcessEchoMsg(headLen, bodyLen, buf, magic, seq)
+		
+		/*
 		rspBuf := make([]byte, headLen+bodyLen)
 		copy(rspBuf, buf[:headLen+bodyLen])
-		this.writeChan <- rspBuf
+		this.writeChan <- rspBuf*/
 	}
 	return 0
 }
 
+func (this *MessageHandler) ProcessEchoMsg(headLen uint16, bodyLen uint16, buf []byte, magic uint16, seq uint32){
+	var msg *proto.Message
+	var ok bool
+	log.Printf("ProcessEchoMsg")
+	select {
+	case msg, ok = <- this.freeMessages:
+		if ok && msg != nil {
+			msg.Head.BodyLen = bodyLen
+			msg.Head.Magic = magic
+			msg.Head.Seq = seq
+			msg.BodyBuf.Write(buf[headLen:headLen+bodyLen])
+		}
+	default:
+		head := proto.NewProtoHead(bodyLen, magic, seq)
+		msg = proto.NewMessage(head)
+		msg.BodyBuf.Write(buf[headLen:headLen+bodyLen])
+	}
+	this.processingMessages <- msg
+}
+
 func (this *MessageHandler) WaitingForWrite() {
+	//var outbuf []byte = make([]byte, 10240)	
 	for {
 		select {
-		case buf, ok := <-this.writeChan:
+		case msg, ok := <-this.processingMessages:
 			if !ok {
 				goto EXITHANDLER
 			}
-			_, err := this.conn.Write(buf)
+			_, err := this.conn.Write(msg.Encoding())
 			if err == nil {
-				//log.Printf("write to %s\n", this.conn.RemoteAddr().String())
+				log.Printf("write to %s\n", this.conn.RemoteAddr().String())
+				//回收
+				msg.Reset()
+				this.freeMessages <- msg
 			} else {
 				//write error, donot do something. or close the socket ?
 				log.Printf("MessageHandler: %d, write error: %s", this.id, err.Error())
+				//写失败也回收
+				msg.Reset()
+				this.freeMessages <- msg
 				goto EXITHANDLER
 			}
+		case <- this.ExitCmd:
+			//退出是消费完所有未处理的message
+			log.Printf("MessageHandler: %d, WaitingForWrite recv exit cmd, len:%d", this.id, len(this.processingMessages))
+			l := len(this.processingMessages)
+			for i:=0;i<l;i++ {
+				msg := <-this.processingMessages
+				msg.Reset()
+				this.freeMessages <- msg
+			}
+			
+			goto EXITHANDLER
 		}
+	
 	}
 EXITHANDLER:
 	this.conn.Close()
+	this.reclaimer <- this
 	log.Printf("MessageHandler: %d WaitingForWrite exit\n", this.id)
 }
 	//1 MSG_ECHO

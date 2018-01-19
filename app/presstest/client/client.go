@@ -5,6 +5,7 @@ import(
 	"flag"
 	"time"
 	"go_project/tcpclient"
+	"go_project/proto"
 )
 var exitChan chan bool
 
@@ -14,15 +15,9 @@ var exitChan chan bool
 //connectionId:连接的ID
 func startAClient(serverAddr string, reconnectCnt int, msgCnt int, connectionId uint32){
 	bodyBuf := "hello world"
-	head := &tcpclient.ProtoHead{
-		BodyLen : uint16(len(bodyBuf)),
-		Magic : 1,
-		Seq : connectionId,
-	}
-	msg := &tcpclient.Message{
-		Head : head,
-		BodyBuf : []byte(bodyBuf),
-	}
+	head := proto.NewProtoHead(uint16(len(bodyBuf)), 1, connectionId)
+	msg := proto.NewMessage(head)
+	msg.WriteBody([]byte(bodyBuf))
 	log.Printf("client:%d starting...\n", connectionId)
 	for i := 0; i < reconnectCnt; i++ {
 		cli := tcpclient.NewTcpClient(serverAddr, 1024)

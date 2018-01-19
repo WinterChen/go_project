@@ -8,6 +8,7 @@ import(
 	"syscall"
 	"errors"
 	"sync"
+	"go_project/proto"
 )
 
 type TcpClient struct {
@@ -15,8 +16,8 @@ type TcpClient struct {
 	conn net.Conn
 	readBufLen int
 	headLen int
-	outMessageChan chan *Message
-	inMessageChan chan *Message
+	outMessageChan chan *proto.Message
+	inMessageChan chan *proto.Message
 	writeExit chan bool
 	status int //0:disconnected, 1:connecting 
 	statusLock *sync.Mutex
@@ -27,9 +28,9 @@ func NewTcpClient(serverAddr string, readBufLen int) (*TcpClient){
 	return &TcpClient{
 		serverAddr : serverAddr,
 		readBufLen : readBufLen,
-		headLen : HEADLEN,
-		outMessageChan : make(chan *Message, 1024),
-		inMessageChan : make(chan *Message, 1024),
+		headLen : proto.HEADLEN,
+		outMessageChan : make(chan *proto.Message, 1024),
+		inMessageChan : make(chan *proto.Message, 1024),
 		writeExit : make(chan bool),
 		status : 0,
 		statusLock : new(sync.Mutex),
@@ -58,7 +59,7 @@ func (this *TcpClient)WaitingForRead(){
 	var buf []byte = make([]byte, this.readBufLen)
 
 	var needRead int = 0
-	var head *ProtoHead
+	var head *proto.ProtoHead
 	var endPos int = 0
 	var startPos int = 0
 	for {
@@ -74,7 +75,7 @@ func (this *TcpClient)WaitingForRead(){
 					break
 				}
 				if needRead == 0 {
-					head = ParseHead(buf[startPos:])
+					head = proto.ParseHead(buf[startPos:])
 				}
 				needRead = int(head.BodyLen) - (endPos - startPos - this.headLen)
 				//log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, head.BodyLen, head.Magic, head.Seq, needRead)
@@ -83,9 +84,9 @@ func (this *TcpClient)WaitingForRead(){
 					break
 				} else {
 					//这里多余一次make和copy的调用
-					bodyDate := make([]byte, head.BodyLen)
-					copy(bodyDate, buf[startPos+this.headLen : ])
-					err = this.handleMsg(bodyDate, head)
+					bodyData := make([]byte, head.BodyLen)
+					copy(bodyData, buf[startPos+this.headLen : ])
+					err = this.handleMsg(bodyData, head)
 					if err != nil {
 						log.Printf("handle msg error, close the connection\n")
 						goto DISCONNECT
@@ -122,11 +123,9 @@ DISCONNECT:
 
 }
 
-func (this *TcpClient) handleMsg(buf []byte, head *ProtoHead)(error){
-	msg := &Message{
-		Head : head,
-		BodyBuf : buf,
-	}
+func (this *TcpClient) handleMsg(buf []byte, head *proto.ProtoHead)(error){
+	msg := proto.NewMessage(head)
+	msg.BodyBuf.Write(buf)
 	select {
 	case this.inMessageChan <- msg:
 	default:
@@ -182,7 +181,7 @@ func (this *TcpClient) Disconnect(){
 
 }
 
-func (this *TcpClient) Write(msg *Message)(error){
+func (this *TcpClient) Write(msg *proto.Message)(error){
 	select {
 	case this.outMessageChan <- msg:
 	default:
@@ -192,7 +191,7 @@ func (this *TcpClient) Write(msg *Message)(error){
 	return nil	
 }
 
-func (this *TcpClient) GetMessage()(*Message){
+func (this *TcpClient) GetMessage()(*proto.Message){
 	for {
 		select {
 		case msg, ok := <- this.inMessageChan:
