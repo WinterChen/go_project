@@ -127,7 +127,7 @@ func NewMessageHandler(conn net.Conn, id int, reclaimer chan *MessageHandler) *M
 	return &MessageHandler{
 		conn : conn,
 		ExitCmd : make(chan bool),
-		writeChan : make(chan []byte, 1024*1024),
+		writeChan : make(chan []byte, 1024),
 		id : id,
 		freeMessages : make(chan *proto.Message, 100*2),//容量是processingMessages两倍，可以根据实际调整
 		processingMessages : make(chan *proto.Message, 100),
