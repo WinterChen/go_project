@@ -57,9 +57,9 @@ func (this *TcpServer)Start(){
 	for i:=0;i<this.handlerCnt;i++ {
 		h := NewMessageHandler(nil, i, this.reclaimer)
 		this.handlers.PushBack(h)
-		log.Printf("i:%d, 每个大小：%d\n", i, unsafe.Sizeof(h))
+		//log.Printf("i:%d, 每个大小：%d\n", i, unsafe.Sizeof(h))
 	}
-	log.Println("MessageHandler cnt: ", this.handlerCnt)
+	//log.Println("MessageHandler cnt: ", this.handlerCnt)
 	this.StartTcpServer(this.tcpAddr)
 }
 
@@ -149,7 +149,7 @@ func (this *MessageHandler)WaitingForRead(){
 	var seq uint32 = 0
 	for {
 		length, err := this.conn.Read(ibuf[endPos:])
-		log.Printf("read data: %d\n", length)
+		//log.Printf("read data: %d\n", length)
 		switch err {
 		case nil:
 			endPos += length
@@ -163,7 +163,7 @@ func (this *MessageHandler)WaitingForRead(){
 					seq = binary.BigEndian.Uint32(ibuf[startPos+4 : startPos+8])
 				}
 				needRead = int(bodyLen) - (endPos - startPos - 8)
-				log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, bodyLen, magic, seq, needRead)
+				//log.Printf("startPos:%d, endPos:%d, bodyLen:%d, magic:%d, seq:%d, needRead:%d", startPos, endPos, bodyLen, magic, seq, needRead)
 				if needRead > 0 {
 					break
 				} else {
@@ -222,7 +222,7 @@ func (this *MessageHandler) handleMsg(headLen uint16, bodyLen uint16, buf []byte
 func (this *MessageHandler) ProcessEchoMsg(headLen uint16, bodyLen uint16, buf []byte, magic uint16, seq uint32){
 	var msg *proto.Message
 	var ok bool
-	log.Printf("ProcessEchoMsg")
+	
 	select {
 	case msg, ok = <- this.freeMessages:
 		if ok && msg != nil {
