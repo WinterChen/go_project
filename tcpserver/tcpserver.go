@@ -249,7 +249,7 @@ func (this *MessageHandler) WaitingForWrite() {
 			}
 			_, err := this.conn.Write(msg.Encoding())
 			if err == nil {
-				log.Printf("write to %s\n", this.conn.RemoteAddr().String())
+				//log.Printf("write to %s\n", this.conn.RemoteAddr().String())
 				//回收
 				msg.Reset()
 				this.freeMessages <- msg
