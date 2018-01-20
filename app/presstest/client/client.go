@@ -29,6 +29,7 @@ func startAClient(serverAddr string, reconnectCnt int, msgCnt int, connectionId 
 		start := time.Now()
 		for j := 0; j < msgCnt; j++{
 			//发送一个消息给server
+			time.Sleep(5*time.Minute)
 			err = cli.Write(msg)
 			if err != nil {
 				log.Printf("write error, err:%s\n", err.Error())
