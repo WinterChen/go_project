@@ -6,6 +6,12 @@ import (
 	"encoding/binary"
 	"bytes"
 )
+
+const (
+	MSG_ECHO = 1
+	MSG_STAT = 2
+	OTHER = 3
+)
 //消息格式为
 /*
  	     8        16       24       32 

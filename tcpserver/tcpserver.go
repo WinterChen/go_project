@@ -21,6 +21,8 @@ type TcpServer struct {
 	handlerCnt int
 	reclaimer chan *MessageHandler
 	//clientMap map[uint64] *MessageHandler//[ip+port]->MessageHandler
+	//businessFuncMap map[int] func(args... interface{})
+	msgProcessorMap map[int] MessageProcessor
 }
 
 type MessageHandler struct {
@@ -29,15 +31,13 @@ type MessageHandler struct {
 	ExitCmd chan bool
 	writeChan chan []byte
 	id int
-	freeMessages chan *proto.Message
-	processingMessages chan *proto.Message
-	reclaimer chan *MessageHandler
+	freeMessages chan *proto.Message //可用的message
+	respMessages chan *proto.Message //响应的message
+	reclaimer chan *MessageHandler //回收的MessageHandler
+	owner *TcpServer
+
 }
 
-const (
-	MSG_ECHO = 1
-	OTHER = 2
-)
 
 
 func NewTcpServer(tcpAddr string) (*TcpServer){
@@ -48,6 +48,8 @@ func NewTcpServer(tcpAddr string) (*TcpServer){
 		handlerCnt : 1000,
 		reclaimer : make(chan *MessageHandler),
 		//clientMap : make(map[uint64] *MessageHandler),
+		//businessFuncMap : make(map[int] func(args... interface{})),
+		msgProcessorMap : make(map[int] MessageProcessor),
 	}
 }
 
@@ -55,12 +57,24 @@ func (this *TcpServer)Start(){
 	//提前生成对象池
 	log.Printf("提前生成对象池, 个数:%d\n", this.handlerCnt)
 	for i:=0;i<this.handlerCnt;i++ {
-		h := NewMessageHandler(nil, i, this.reclaimer)
+		h := NewMessageHandler(nil, i, this.reclaimer, this)
 		this.handlers.PushBack(h)
 		//log.Printf("i:%d, 每个大小：%d\n", i, unsafe.Sizeof(h))
 	}
 	//log.Println("MessageHandler cnt: ", this.handlerCnt)
 	this.StartTcpServer(this.tcpAddr)
+}
+
+func (this *TcpServer) RegisterMessageProcessor(magic int, f MessageProcessor){
+	this.msgProcessorMap[magic] = f
+}
+
+func (this *TcpServer) GetMessageProcessor(magic int) (MessageProcessor){
+	f, ok := this.msgProcessorMap[magic]
+	if !ok {
+		return nil
+	}
+	return f
 }
 
 
@@ -99,12 +113,12 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 				handler.conn = conn
 			} else {//类型断言失败？不可能吧
 				log.Println("the element in handlers list is not MessageHandler type ???")
-				handler = NewMessageHandler(conn, this.handlerCnt,this.reclaimer)
+				handler = NewMessageHandler(conn, this.handlerCnt,this.reclaimer, this)
 				this.handlerCnt++ 
 			}
 		} else {//handler池已经没有对象
 			log.Println("there is not enought element in obj list!!!")
-			handler = NewMessageHandler(conn, this.handlerCnt,this.reclaimer)
+			handler = NewMessageHandler(conn, this.handlerCnt,this.reclaimer, this)
 			this.handlerCnt++
 		}
 		//每次从回收池中获取一个对象，丢到列表中
@@ -122,16 +136,21 @@ func (this *TcpServer) StartTcpServer(hostAndPort string) error {
 	
 	}
 }
+/*
+func (this *TcpServer) RegisterBusinessFunc(business int, f func(args... interface{})){
+	this.businessFuncMap[business] = f
+}*/
 
-func NewMessageHandler(conn net.Conn, id int, reclaimer chan *MessageHandler) *MessageHandler{
+func NewMessageHandler(conn net.Conn, id int, reclaimer chan *MessageHandler, server *TcpServer) *MessageHandler{
 	return &MessageHandler{
 		conn : conn,
 		ExitCmd : make(chan bool),
 		writeChan : make(chan []byte, 1024),
 		id : id,
-		freeMessages : make(chan *proto.Message, 100*2),//容量是processingMessages两倍，可以根据实际调整
-		processingMessages : make(chan *proto.Message, 100),
+		freeMessages : make(chan *proto.Message, 100*2),//容量是respMessages两倍，可以根据实际调整
+		respMessages : make(chan *proto.Message, 100),
 		reclaimer : reclaimer,
+		owner : server,
 	}
 }
 
@@ -204,18 +223,33 @@ DISCONNECT:
 }
 
 func (this *MessageHandler) handleMsg(headLen uint16, bodyLen uint16, buf []byte, magic uint16, seq uint32) int {
-	//1 MSG_ECHO
-	switch magic  {
-		
-	case MSG_ECHO://echo
-		
-		this.ProcessEchoMsg(headLen, bodyLen, buf, magic, seq)
-		
-		/*
-		rspBuf := make([]byte, headLen+bodyLen)
-		copy(rspBuf, buf[:headLen+bodyLen])
-		this.writeChan <- rspBuf*/
+	//生成Message
+	var msg *proto.Message
+	var ok bool
+	
+	select {
+	case msg, ok = <- this.freeMessages:
+		if ok && msg != nil {
+			msg.Head.BodyLen = bodyLen
+			msg.Head.Magic = magic
+			msg.Head.Seq = seq
+			msg.BodyBuf.Write(buf[headLen:headLen+bodyLen])
+		}
+	default:
+		head := proto.NewProtoHead(bodyLen, magic, seq)
+		msg = proto.NewMessage(head)
+		msg.BodyBuf.Write(buf[headLen:headLen+bodyLen])
 	}
+	//处理message
+	messageHandler := this.owner.GetMessageProcessor(int(magic))
+	rspMsg := messageHandler.ProcessMsg(msg)
+	if rspMsg == nil {//回收
+		msg.Reset()
+		this.freeMessages <- msg
+	} else {
+		this.respMessages <- rspMsg
+	}
+	
 	return 0
 }
 
@@ -236,14 +270,17 @@ func (this *MessageHandler) ProcessEchoMsg(headLen uint16, bodyLen uint16, buf [
 		msg = proto.NewMessage(head)
 		msg.BodyBuf.Write(buf[headLen:headLen+bodyLen])
 	}
-	this.processingMessages <- msg
+	//处理message
+
+	this.respMessages <- msg
 }
+
 
 func (this *MessageHandler) WaitingForWrite() {
 	//var outbuf []byte = make([]byte, 10240)	
 	for {
 		select {
-		case msg, ok := <-this.processingMessages:
+		case msg, ok := <-this.respMessages:
 			if !ok {
 				goto EXITHANDLER
 			}
@@ -262,11 +299,11 @@ func (this *MessageHandler) WaitingForWrite() {
 				goto EXITHANDLER
 			}
 		case <- this.ExitCmd:
-			//退出是消费完所有未处理的message
-			log.Printf("MessageHandler: %d, WaitingForWrite recv exit cmd, len:%d", this.id, len(this.processingMessages))
-			l := len(this.processingMessages)
+			//退出是消费完所有未回复的message
+			log.Printf("MessageHandler: %d, WaitingForWrite recv exit cmd, len:%d", this.id, len(this.respMessages))
+			l := len(this.respMessages)
 			for i:=0;i<l;i++ {
-				msg := <-this.processingMessages
+				msg := <-this.respMessages
 				msg.Reset()
 				this.freeMessages <- msg
 			}
