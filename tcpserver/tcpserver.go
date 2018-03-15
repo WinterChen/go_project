@@ -167,7 +167,13 @@ func (this *MessageHandler)WaitingForRead(){
 	var magic uint16 = 0
 	var seq uint32 = 0
 	for {
+		//如果endPos=10240，表示read 0 byte数据，则Read会一直返回，造成死循环。所以要增加如下判断
+		if endPos == 10240  {
+			log.Printf("endPos == 10240, read data error, may the data from client is error, close!!! ")
+			goto DISCONNECT
+		}
 		length, err := this.conn.Read(ibuf[endPos:])
+		
 		//log.Printf("read data: %d\n", length)
 		switch err {
 		case nil:
