@@ -79,6 +79,7 @@ func (this *Message) WriteBody(buf []byte){
 }
 
 func (this *Message) Encoding()([]byte){
+	this.EncodingBuf.Reset()//encoding的时候先reset
 	binary.Write(this.EncodingBuf, binary.BigEndian, this.Head)
 	this.EncodingBuf.Write(this.BodyBuf.Bytes())
 	return this.EncodingBuf.Bytes()
