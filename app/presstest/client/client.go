@@ -42,8 +42,8 @@ func startAClient(serverAddr string, reconnectCnt int, msgCnt int, connectionId 
 			}
 			//等待server响应
 			//log.Println("waiting for response...")
-			msg = cli.GetMessage()
-			if msg == nil {
+			msg1 := cli.GetMessage()
+			if msg1 == nil {
 				log.Println("get message err")
 				return
 			}
