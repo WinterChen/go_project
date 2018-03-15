@@ -119,7 +119,7 @@ DISCONNECT:
 	//write goroutine退出
 	this.Disconnect()
 	this.writeExit <- true
-	log.Printf("WaitingForRead exit \n")
+	//log.Printf("WaitingForRead exit \n")
 
 }
 

@@ -20,6 +20,7 @@ type EchoServer struct {
 
 }
 func (this *EchoServer) ProcessMsg(msg *proto.Message) (*proto.Message){
+	//fmt.Println("EchoServer, processmsg")
 	return msg
 }
 func HTTPHandler(w http.ResponseWriter, r *http.Request) {

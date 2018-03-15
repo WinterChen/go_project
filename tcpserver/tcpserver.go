@@ -218,7 +218,7 @@ func (this *MessageHandler)WaitingForRead(){
 DISCONNECT:
 	
 	this.ExitCmd <-true
-	log.Printf("MessageHandler: %d WaitingForRead exit  \n", this.id)
+	//log.Printf("MessageHandler: %d WaitingForRead exit  \n", this.id)
 
 }
 
@@ -242,6 +242,12 @@ func (this *MessageHandler) handleMsg(headLen uint16, bodyLen uint16, buf []byte
 	}
 	//处理message
 	messageHandler := this.owner.GetMessageProcessor(int(magic))
+	if messageHandler == nil {
+		log.Printf("not found message handler for magic: %d \n", magic)
+		msg.Reset()
+		this.freeMessages <- msg
+		return 0
+	}
 	rspMsg := messageHandler.ProcessMsg(msg)
 	if rspMsg == nil {//回收
 		msg.Reset()
@@ -300,7 +306,7 @@ func (this *MessageHandler) WaitingForWrite() {
 			}
 		case <- this.ExitCmd:
 			//退出是消费完所有未回复的message
-			log.Printf("MessageHandler: %d, WaitingForWrite recv exit cmd, len:%d", this.id, len(this.respMessages))
+			//log.Printf("MessageHandler: %d, WaitingForWrite recv exit cmd, len:%d", this.id, len(this.respMessages))
 			l := len(this.respMessages)
 			for i:=0;i<l;i++ {
 				msg := <-this.respMessages
@@ -315,6 +321,6 @@ func (this *MessageHandler) WaitingForWrite() {
 EXITHANDLER:
 	this.conn.Close()
 	this.reclaimer <- this
-	log.Printf("MessageHandler: %d WaitingForWrite exit\n", this.id)
+	//log.Printf("MessageHandler: %d WaitingForWrite exit\n", this.id)
 }
 	//1 MSG_ECHO
