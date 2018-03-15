@@ -61,7 +61,7 @@ func startAClient(serverAddr string, reconnectCnt int, msgCnt int, connectionId 
 		cli.Disconnect()//关闭连接
 	}
 	log.Printf("[%d]本次连接了%d次\n", connectionId, reconnectCnt)
-	time.Sleep(2*time.Minute)
+	//time.Sleep(2*time.Minute)
 	exitChan <- true
 	return 
 }
