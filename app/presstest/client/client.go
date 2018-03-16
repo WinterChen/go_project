@@ -5,9 +5,17 @@ import(
 	"flag"
 	"time"
 	"sync"
+	"os"
+	"os/signal"
+	"syscall"
+	"runtime/pprof"
+	_ "net/http/pprof"
+	"net/http"
+	"runtime"
 	"go_project/tcpclient"
 	"go_project/proto"
 	"encoding/json"
+	"fmt"
 )
 var exitChan chan bool
 
@@ -84,6 +92,33 @@ func NewStatInfo()(*StatInfo){
 
 }
 
+func HTTPHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	p := pprof.Lookup("goroutine")
+	p.WriteTo(w, 1)
+}
+
+func WaitingForSignal(){
+	signalChan := make(chan os.Signal, 1)
+	defer close(signalChan)
+	signal.Notify(signalChan, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGSTOP)
+	<-signalChan
+	signal.Stop(signalChan)
+	saveHeapProfile()
+	os.Exit(0)
+}
+//生成内存prof，方便定位内存泄漏问题
+func saveHeapProfile() {
+		runtime.GC()//先GC
+		f, err := os.Create(fmt.Sprintf("./heap_%s.prof", time.Now().Format("2006_01_02_03_04_05")))
+		if err != nil {
+			return
+		}
+		pprof.Lookup("heap").WriteTo(f, 1)
+		f.Close()
+	} 
+
+
 func main() {
 	serverAddr := flag.String("server", "127.0.0.1:33333", "服务端的地址")
 	statAddr := flag.String("stat", "127.0.0.1:44444", "统计模块的地址")
@@ -92,6 +127,12 @@ func main() {
 	reconnectCnt := flag.Int("conn", 1, "每个客户端关闭后重连次数")
 	id := flag.Int("id", 0, "id")
 	flag.Parse()
+	pprofAddr := flag.String("pprofAddr", "localhost:6060", "pprof http listen addr")
+	flag.Parse()
+	go func(){
+		log.Println(http.ListenAndServe(*pprofAddr, nil)) 
+	}()
+	go WaitingForSignal()
 	flag.Usage()
 	exitChan = make(chan bool)
 	start := time.Now()
